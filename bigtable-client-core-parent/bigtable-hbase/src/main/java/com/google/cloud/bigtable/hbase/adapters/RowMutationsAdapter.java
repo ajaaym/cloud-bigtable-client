@@ -44,11 +44,13 @@ public class RowMutationsAdapter extends MutationAdapter<RowMutations>{
   }
 
   @Override
-  protected Collection<com.google.bigtable.v2.Mutation> adaptMutations(RowMutations operation) {
-    List<com.google.bigtable.v2.Mutation> result = new ArrayList<>();
-    for (Mutation mutation : operation.getMutations()) {
-      result.addAll(mutationAdapter.adaptMutations(mutation));
+  protected void adaptMutations(RowMutations operation,
+      com.google.cloud.bigtable.data.v2.models.Mutation bigtableMutation) {
+    if (bigtableMutation == null) {
+      bigtableMutation = newMutationBuilder();
     }
-    return result;
+    for (Mutation mutation : operation.getMutations()) {
+      mutationAdapter.adaptMutations(mutation, bigtableMutation);
+    }
   }
 }

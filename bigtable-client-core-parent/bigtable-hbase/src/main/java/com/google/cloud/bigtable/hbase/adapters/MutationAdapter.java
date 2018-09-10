@@ -16,6 +16,8 @@
 package com.google.cloud.bigtable.hbase.adapters;
 
 import java.util.Collection;
+
+import com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.client.Mutation;
 import org.apache.hadoop.hbase.client.Row;
@@ -43,15 +45,27 @@ public abstract class MutationAdapter<T extends Row>
   /** {@inheritDoc} */
   @Override
   public final MutateRowRequest.Builder adapt(T operation) {
+    com.google.cloud.bigtable.data.v2.models.Mutation mutation =
+        newMutationBuilder();
+    adaptMutations(operation,mutation);
     return MutateRowRequest.newBuilder()
         .setRowKey(ByteString.copyFrom(operation.getRow()))
-        .addAllMutations(adaptMutations(operation));
+        .addAllMutations(mutation.getMutations());
   }
 
   public final MutateRowsRequest.Entry toEntry(T operation) {
+    com.google.cloud.bigtable.data.v2.models.Mutation mutation =
+        newMutationBuilder();
+    adaptMutations(operation, mutation);
     return MutateRowsRequest.Entry.newBuilder()
         .setRowKey(ByteString.copyFrom(operation.getRow()))
-        .addAllMutations(adaptMutations(operation)).build();
+        .addAllMutations(mutation.getMutations())
+        .build();
+  }
+
+  @VisibleForTesting
+  protected com.google.cloud.bigtable.data.v2.models.Mutation newMutationBuilder() {
+    return com.google.cloud.bigtable.data.v2.models.Mutation.create();
   }
 
   /**
@@ -65,5 +79,6 @@ public abstract class MutationAdapter<T extends Row>
    * @param operation The HBase {@link Mutation} to convert
    * @return a {@link Collection} of Cloud Bigtable {@link Mutation}
    */
-  protected abstract Collection<com.google.bigtable.v2.Mutation> adaptMutations(T operation);
+  protected abstract void adaptMutations(T operation,
+      com.google.cloud.bigtable.data.v2.models.Mutation bigtableMutation);
 }

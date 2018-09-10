@@ -77,7 +77,8 @@ public class PutAdapter extends MutationAdapter<Put> {
   }
 
   @Override
-  protected Collection<Mutation> adaptMutations(Put operation) {
+  protected void adaptMutations(Put operation,
+      com.google.cloud.bigtable.data.v2.models.Mutation bigtableMuation) {
     if (operation.isEmpty()) {
       throw new IllegalArgumentException("No columns to insert");
     }
@@ -117,17 +118,13 @@ public class PutAdapter extends MutationAdapter<Put> {
           timestampMicros = TimestampConverter.hbase2bigtable(cell.getTimestamp());
         }
 
-        mutations.add(Mutation.newBuilder()
-            .setSetCell(SetCell.newBuilder()
-                .setFamilyNameBytes(familyString)
-                .setColumnQualifier(cellQualifierByteString)
-                .setValue(value)
-                .setTimestampMicros(timestampMicros)
-                .build())
-            .build());
+        bigtableMuation.setCell(
+            familyString.toStringUtf8(),
+            cellQualifierByteString,
+            timestampMicros,
+            value);
       }
     }
-    return mutations;
   }
 
   /**
