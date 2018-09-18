@@ -15,6 +15,7 @@
  */
 package com.google.cloud.bigtable.hbase.adapters;
 
+import com.google.cloud.bigtable.data.v2.models.RowMutation;
 import org.apache.hadoop.hbase.client.Append;
 import org.apache.hadoop.hbase.client.Delete;
 import org.apache.hadoop.hbase.client.Increment;
@@ -76,13 +77,13 @@ public class HBaseMutationAdapter extends MutationAdapter<Mutation> {
   @Override
   /** {@inheritDoc} */
   protected void adaptMutations(Mutation mutation,
-      com.google.cloud.bigtable.data.v2.models.Mutation bigtableMutation) {
+      RowMutation rowMutation) {
     MutationAdapter<Mutation> adapter = adapterMap.get(mutation.getClass());
     if (adapter == null) {
       throw new UnsupportedOperationException(
           String.format(
               "Cannot adapt mutation of type %s.", mutation.getClass().getCanonicalName()));
     }
-    adapter.adaptMutations(mutation, bigtableMutation);
+    adapter.adaptMutations(mutation, rowMutation);
   }
 }

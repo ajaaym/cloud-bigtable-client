@@ -15,6 +15,7 @@
  */
 package com.google.cloud.bigtable.hbase.adapters;
 
+import com.google.cloud.bigtable.data.v2.models.RowMutation;
 import com.google.protobuf.MessageLite;
 
 import org.apache.hadoop.hbase.client.Row;
@@ -27,7 +28,7 @@ import org.apache.hadoop.hbase.client.Row;
  * @author sduskis
  * @version $Id: $Id
  */
-public interface OperationAdapter<T extends Row, U extends MessageLite.Builder> {
+public interface OperationAdapter<T extends Row, B> {
 
   /**
    * Adapt a single HBase Operation to a single Bigtable generated message.
@@ -35,5 +36,5 @@ public interface OperationAdapter<T extends Row, U extends MessageLite.Builder> 
    * @param operation The HBase operation to convert.
    * @return An equivalent Bigtable
    */
-  public U adapt(T operation);
+  public void adapt(T operation, B builder);
 }

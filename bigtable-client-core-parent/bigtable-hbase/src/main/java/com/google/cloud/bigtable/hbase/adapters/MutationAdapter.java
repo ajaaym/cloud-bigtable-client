@@ -17,6 +17,7 @@ package com.google.cloud.bigtable.hbase.adapters;
 
 import java.util.Collection;
 
+import com.google.cloud.bigtable.data.v2.models.RowMutation;
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.client.Mutation;
@@ -36,7 +37,7 @@ import com.google.protobuf.ByteString;
  * @version $Id: $Id
  */
 public abstract class MutationAdapter<T extends Row>
-    implements OperationAdapter<T, MutateRowRequest.Builder> {
+    implements OperationAdapter<T, RowMutation> {
 
   protected static byte[] getBytes(ByteString bs) {
     return ByteStringer.extract(bs);
@@ -44,24 +45,22 @@ public abstract class MutationAdapter<T extends Row>
 
   /** {@inheritDoc} */
   @Override
-  public final MutateRowRequest.Builder adapt(T operation) {
-    com.google.cloud.bigtable.data.v2.models.Mutation mutation =
-        newMutationBuilder();
-    adaptMutations(operation,mutation);
-    return MutateRowRequest.newBuilder()
-        .setRowKey(ByteString.copyFrom(operation.getRow()))
-        .addAllMutations(mutation.getMutations());
+  public final void adapt(T operation, RowMutation rowMutation) {
+    adaptMutations(operation,rowMutation);
+//    return MutateRowRequest.newBuilder()
+//        .setRowKey(ByteString.copyFrom(operation.getRow()))
+//        .addAllMutations(mutation.getMutations());
   }
 
-  public final MutateRowsRequest.Entry toEntry(T operation) {
-    com.google.cloud.bigtable.data.v2.models.Mutation mutation =
-        newMutationBuilder();
-    adaptMutations(operation, mutation);
-    return MutateRowsRequest.Entry.newBuilder()
-        .setRowKey(ByteString.copyFrom(operation.getRow()))
-        .addAllMutations(mutation.getMutations())
-        .build();
-  }
+//  public final MutateRowsRequest.Entry toEntry(T operation) {
+//    com.google.cloud.bigtable.data.v2.models.Mutation mutation =
+//        newMutationBuilder();
+//    adaptMutations(operation, mutation);
+//    return MutateRowsRequest.Entry.newBuilder()
+//        .setRowKey(ByteString.copyFrom(operation.getRow()))
+//        .addAllMutations(mutation.getMutations())
+//        .build();
+//  }
 
   @VisibleForTesting
   protected com.google.cloud.bigtable.data.v2.models.Mutation newMutationBuilder() {
@@ -80,5 +79,5 @@ public abstract class MutationAdapter<T extends Row>
    * @return a {@link Collection} of Cloud Bigtable {@link Mutation}
    */
   protected abstract void adaptMutations(T operation,
-      com.google.cloud.bigtable.data.v2.models.Mutation bigtableMutation);
+      RowMutation rowMutation);
 }

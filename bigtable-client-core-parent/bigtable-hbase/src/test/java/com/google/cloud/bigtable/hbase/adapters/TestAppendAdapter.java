@@ -17,28 +17,56 @@ package com.google.cloud.bigtable.hbase.adapters;
 
 import com.google.bigtable.v2.ReadModifyWriteRowRequest;
 import com.google.bigtable.v2.ReadModifyWriteRule;
+import com.google.cloud.bigtable.data.v2.internal.RequestContext;
+import com.google.cloud.bigtable.data.v2.models.InstanceName;
+import com.google.cloud.bigtable.data.v2.models.ReadModifyWriteRow;
+import com.google.cloud.bigtable.data.v2.models.RowMutation;
 import com.google.cloud.bigtable.hbase.DataGenerationHelper;
 import com.google.protobuf.ByteString;
 
 import org.apache.hadoop.hbase.client.Append;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 import java.util.List;
 
 @RunWith(JUnit4.class)
 public class TestAppendAdapter {
+  private static final String PROJECT_ID = "test-project-id";
+  private static final String INSTANCE_ID = "test-instance-id";
+  private static final String TABLE_ID = "test-table-id";
+  public static final String APP_PROFILE_ID = "test-app-profile-id";
   protected AppendAdapter appendAdapter = new AppendAdapter();
   protected DataGenerationHelper dataHelper = new DataGenerationHelper();
+  @Mock
+  private RequestContext requestContext;
+  @Mock
+  private InstanceName instanceName;
+
+
+  @Before
+  public void setUp() throws Exception {
+    MockitoAnnotations.initMocks(this);
+    Mockito.when(instanceName.getProject()).thenReturn(PROJECT_ID);
+    Mockito.when(instanceName.getInstance()).thenReturn(INSTANCE_ID);
+    Mockito.when(requestContext.getInstanceName()).thenReturn(instanceName);
+    Mockito.when(requestContext.getAppProfileId()).thenReturn(APP_PROFILE_ID);
+  }
 
   @Test
   public void testBasicRowKeyAppend() {
     byte[] rowKey = dataHelper.randomData("rk1-");
     Append append = new Append(rowKey);
-    ReadModifyWriteRowRequest request = appendAdapter.adapt(append).build();
+    ReadModifyWriteRow readModifyWriteRow = ReadModifyWriteRow.create(TABLE_ID, ByteString.copyFrom(rowKey));
+    appendAdapter.adapt(append, readModifyWriteRow);
+    ReadModifyWriteRowRequest request = readModifyWriteRow.toProto(requestContext);
     ByteString adaptedRowKey = request.getRowKey();
     Assert.assertArrayEquals(rowKey, adaptedRowKey.toByteArray());
   }
@@ -58,8 +86,9 @@ public class TestAppendAdapter {
     Append append = new Append(rowKey);
     append.add(family1, qualifier1, value1);
     append.add(family2, qualifier2, value2);
-
-    ReadModifyWriteRowRequest request = appendAdapter.adapt(append).build();
+    ReadModifyWriteRow readModifyWriteRow = ReadModifyWriteRow.create(TABLE_ID, ByteString.copyFrom(rowKey));
+    appendAdapter.adapt(append, readModifyWriteRow);
+    ReadModifyWriteRowRequest request = readModifyWriteRow.toProto(requestContext);
     List<ReadModifyWriteRule> rules = request.getRulesList();
     Assert.assertEquals(2, rules.size());
 
@@ -91,7 +120,9 @@ public class TestAppendAdapter {
     append.add(family2, qualifier2, value2);
     append.add(family2, qualifier2, value3);
 
-    ReadModifyWriteRowRequest request = appendAdapter.adapt(append).build();
+    ReadModifyWriteRow readModifyWriteRow = ReadModifyWriteRow.create(TABLE_ID, ByteString.copyFrom(rowKey));
+    appendAdapter.adapt(append, readModifyWriteRow);
+    ReadModifyWriteRowRequest request = readModifyWriteRow.toProto(requestContext);
     List<ReadModifyWriteRule> rules = request.getRulesList();
     Assert.assertEquals(2, rules.size());
 
@@ -120,7 +151,9 @@ public class TestAppendAdapter {
     append.add(family1, qualifier1, value1);
     append.add(family2, qualifier1, value2);
 
-    ReadModifyWriteRowRequest request = appendAdapter.adapt(append).build();
+    ReadModifyWriteRow readModifyWriteRow = ReadModifyWriteRow.create(TABLE_ID, ByteString.copyFrom(rowKey));
+    appendAdapter.adapt(append, readModifyWriteRow);
+    ReadModifyWriteRowRequest request = readModifyWriteRow.toProto(requestContext);
     List<ReadModifyWriteRule> rules = request.getRulesList();
     Assert.assertEquals(2, rules.size());
 

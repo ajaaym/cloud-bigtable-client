@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
+import com.google.cloud.bigtable.data.v2.models.RowMutation;
 import org.apache.hadoop.hbase.client.Mutation;
 import org.apache.hadoop.hbase.client.RowMutations;
 
@@ -45,12 +46,9 @@ public class RowMutationsAdapter extends MutationAdapter<RowMutations>{
 
   @Override
   protected void adaptMutations(RowMutations operation,
-      com.google.cloud.bigtable.data.v2.models.Mutation bigtableMutation) {
-    if (bigtableMutation == null) {
-      bigtableMutation = newMutationBuilder();
-    }
+      RowMutation rowMutation) {
     for (Mutation mutation : operation.getMutations()) {
-      mutationAdapter.adaptMutations(mutation, bigtableMutation);
+      mutationAdapter.adaptMutations(mutation, rowMutation);
     }
   }
 }

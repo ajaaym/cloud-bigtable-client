@@ -20,6 +20,7 @@ import com.google.bigtable.v2.MutateRowRequest;
 import com.google.bigtable.v2.Mutation;
 import com.google.bigtable.v2.Mutation.MutationCase;
 import com.google.bigtable.v2.Mutation.SetCell;
+import com.google.cloud.bigtable.data.v2.models.RowMutation;
 import com.google.cloud.bigtable.hbase.BigtableConstants;
 import com.google.cloud.bigtable.hbase.adapters.read.RowCell;
 import com.google.cloud.bigtable.hbase.util.TimestampConverter;
@@ -78,7 +79,7 @@ public class PutAdapter extends MutationAdapter<Put> {
 
   @Override
   protected void adaptMutations(Put operation,
-      com.google.cloud.bigtable.data.v2.models.Mutation bigtableMuation) {
+      RowMutation rowMutation) {
     if (operation.isEmpty()) {
       throw new IllegalArgumentException("No columns to insert");
     }
@@ -118,7 +119,7 @@ public class PutAdapter extends MutationAdapter<Put> {
           timestampMicros = TimestampConverter.hbase2bigtable(cell.getTimestamp());
         }
 
-        bigtableMuation.setCell(
+        rowMutation.setCell(
             familyString.toStringUtf8(),
             cellQualifierByteString,
             timestampMicros,
