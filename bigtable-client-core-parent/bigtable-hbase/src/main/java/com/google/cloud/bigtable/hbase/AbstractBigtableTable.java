@@ -15,6 +15,7 @@
  */
 package com.google.cloud.bigtable.hbase;
 
+import com.google.cloud.bigtable.data.v2.models.RowMutation;
 import io.opencensus.common.Scope;
 import io.opencensus.trace.Status;
 import java.io.IOException;
@@ -344,11 +345,11 @@ public abstract class AbstractBigtableTable implements Table {
   @Override
   public void put(Put put) throws IOException {
     LOG.trace("put(Put)");
-    MutateRowRequest request = hbaseAdapter.adapt(put);
+    RowMutation rowMutation = hbaseAdapter.adapt(put);
     Span span = TRACER.spanBuilder("BigtableTable.put").startSpan();
     try (Scope scope = TRACER.withSpan(span);
         Timer.Context timerContext = metrics.putTimer.time()) {
-      client.mutateRow(request);
+      client.mutateRow(rowMutation);
     } catch (Throwable t) {
       span.setStatus(Status.UNKNOWN);
       throw logAndCreateIOException("put", put.getRow(), t);

@@ -203,10 +203,11 @@ public class HBaseRequestAdapter {
    * @param put a {@link org.apache.hadoop.hbase.client.Put} object.
    * @return a {@link com.google.bigtable.v2.MutateRowRequest} object.
    */
-  public MutateRowRequest adapt(Put put) {
+  public RowMutation adapt(Put put) {
     RowMutation rowMutation = RowMutation.create(bigtableTableName.getTableId(), ByteString.copyFrom(put.getRow()));
-    mutationAdapters.putAdapter.adapt(put, rowMutation);
-    return rowMutation.toProto(requestContext);
+    return rowMutation;
+//    mutationAdapters.putAdapter.adapt(put, rowMutation);
+//    return rowMutation.toProto(requestContext);
   }
 
 

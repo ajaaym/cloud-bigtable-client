@@ -150,7 +150,7 @@ public class BigtableSession implements Closeable {
   }
 
   private Watchdog watchdog;
-  private final BigtableDataClient dataClient;
+  private final BigtableDataClientCore dataClient;
 
   // This BigtableDataClient has an additional throttling interceptor, which is not recommended for
   // synchronous operations.
@@ -222,9 +222,12 @@ public class BigtableSession implements Closeable {
     // More often than not, users want the dataClient. Create a new one in the constructor.
     CallOptionsFactory.ConfiguredCallOptionsFactory callOptionsFactory =
         new CallOptionsFactory.ConfiguredCallOptionsFactory(options.getCallOptionsConfig());
-    dataClient =
-        new BigtableDataGrpcClient(dataChannel, sharedPools.getRetryExecutor(), options);
-    dataClient.setCallOptionsFactory(callOptionsFactory);
+    if(opts.isUseBigtableHbaseClient()) {
+      dataClient = new BigtableDataGrpcClient(dataChannel, sharedPools.getRetryExecutor(), options);
+      ((BigtableDataClient) dataClient).setCallOptionsFactory(callOptionsFactory);
+    } else {
+      dataClient = new BigtableDataClientCoreImpl(opts);
+    }
 
     // Async operations can run amok, so they need to have some throttling. The throttling is
     // achieved through a ThrottlingClientInterceptor.  gRPC wraps ClientInterceptors in Channels,
@@ -297,7 +300,7 @@ public class BigtableSession implements Closeable {
    * @return a {@link com.google.cloud.bigtable.grpc.BigtableDataClient} object.
    */
   public BigtableDataClient getDataClient() {
-    return dataClient;
+    return (BigtableDataClient) dataClient;
   }
 
   /**
@@ -343,7 +346,7 @@ public class BigtableSession implements Closeable {
    * @return a {@link com.google.cloud.bigtable.grpc.async.BulkRead} object.
    */
   public BulkRead createBulkRead(BigtableTableName tableName) {
-    return new BulkRead(dataClient, tableName, options.getBulkOptions().getBulkMaxRowKeyCount(),
+    return new BulkRead((BigtableDataClient) dataClient, tableName, options.getBulkOptions().getBulkMaxRowKeyCount(),
         BigtableSessionSharedThreadPools.getInstance().getBatchThreadPool()
     );
   }

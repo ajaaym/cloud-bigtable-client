@@ -59,6 +59,8 @@ public class BigtableOptions implements Serializable, Cloneable {
   /** Constant <code>BIGTABLE_APP_PROFILE_DEFAULT=""</code>, defaults to the server default app profile */
   public static final String BIGTABLE_APP_PROFILE_DEFAULT = "";
 
+  public static final boolean BIGTABLE_HBASE_CLIENT_DEFAULT = false;
+
   private static final Logger LOG = new Logger(BigtableOptions.class);
 
   private static int getDefaultDataChannelCount() {
@@ -102,6 +104,7 @@ public class BigtableOptions implements Serializable, Cloneable {
       // the Google Compute Engine metadata service or gcloud configuration in other environments. A
       // user can also override the default behavior with P12 or JSON configuration.
       options.credentialOptions = CredentialOptions.defaultCredentials();
+      options.useBigtableHbaseClient = false;
     }
 
     private Builder(BigtableOptions options) {
@@ -170,6 +173,11 @@ public class BigtableOptions implements Serializable, Cloneable {
 
     public Builder setUsePlaintextNegotiation(boolean usePlaintextNegotiation) {
       options.usePlaintextNegotiation = usePlaintextNegotiation;
+      return this;
+    }
+
+    public Builder setUseBigtableHbaseClient(boolean useBigtableHbaseClient) {
+      options.useBigtableHbaseClient = useBigtableHbaseClient;
       return this;
     }
 
@@ -274,6 +282,7 @@ public class BigtableOptions implements Serializable, Cloneable {
   private int dataChannelCount;
   private boolean usePlaintextNegotiation;
   private boolean useCachedDataPool;
+  private boolean useBigtableHbaseClient;
 
   private BigtableInstanceName instanceName;
 
@@ -404,6 +413,10 @@ public class BigtableOptions implements Serializable, Cloneable {
     return usePlaintextNegotiation;
   }
 
+  public boolean isUseBigtableHbaseClient() {
+    return useBigtableHbaseClient;
+  }
+
   /**
    * <p>Getter for the field <code>callOptionsConfig</code>.</p>
    *
@@ -436,7 +449,8 @@ public class BigtableOptions implements Serializable, Cloneable {
         && Objects.equals(credentialOptions, other.credentialOptions)
         && Objects.equals(retryOptions, other.retryOptions)
         && Objects.equals(bulkOptions, other.bulkOptions)
-        && Objects.equals(callOptionsConfig, other.callOptionsConfig);
+        && Objects.equals(callOptionsConfig, other.callOptionsConfig)
+        && Objects.equals(useBigtableHbaseClient, other.useBigtableHbaseClient);
   }
 
   /** {@inheritDoc} */
@@ -458,6 +472,7 @@ public class BigtableOptions implements Serializable, Cloneable {
         .add("callOptionsConfig", callOptionsConfig)
         .add("usePlaintextNegotiation", usePlaintextNegotiation)
         .add("useCachedDataPool", useCachedDataPool)
+        .add("useBigtableHbaseClient", useBigtableHbaseClient)
         .toString();
   }
 

@@ -19,6 +19,9 @@ import static com.google.cloud.bigtable.grpc.io.GoogleCloudResourcePrefixInterce
 
 import com.google.api.core.ApiClock;
 import com.google.api.core.NanoClock;
+import com.google.cloud.bigtable.data.v2.internal.RequestContext;
+import com.google.cloud.bigtable.data.v2.models.InstanceName;
+import com.google.cloud.bigtable.data.v2.models.RowMutation;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.Metadata;
@@ -27,6 +30,7 @@ import io.grpc.stub.StreamObserver;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import javax.annotation.Nullable;
 import com.google.bigtable.v2.BigtableGrpc;
@@ -150,6 +154,7 @@ public class BigtableDataGrpcClient implements BigtableDataClient {
   private final String clientDefaultAppProfileId;
   private final ScheduledExecutorService retryExecutorService;
   private final RetryOptions retryOptions;
+  private final RequestContext requestContext;
 
   private CallOptionsFactory callOptionsFactory = new CallOptionsFactory.Default();
 
@@ -186,6 +191,8 @@ public class BigtableDataGrpcClient implements BigtableDataClient {
     this.clientDefaultAppProfileId = bigtableOptions.getAppProfileId();
     this.retryExecutorService = retryExecutorService;
     this.retryOptions = bigtableOptions.getRetryOptions();
+
+    this.requestContext = RequestContext.create(InstanceName.of(bigtableOptions.getProjectId(), bigtableOptions.getInstanceId()), clientDefaultAppProfileId);
 
     BigtableAsyncUtilities asyncUtilities = new BigtableAsyncUtilities.Default(channel);
     this.sampleRowKeysAsync = asyncUtilities.createAsyncRpc(
@@ -507,5 +514,11 @@ public class BigtableDataGrpcClient implements BigtableDataClient {
 
   private boolean shouldOverrideAppProfile(String requestProfile) {
     return !this.clientDefaultAppProfileId.isEmpty() && requestProfile.isEmpty();
+  }
+
+  @Override
+  public void mutateRow(RowMutation rowMutation) throws ExecutionException, InterruptedException{
+    MutateRowRequest mutateRowRequest = rowMutation.toProto(requestContext);
+    mutateRow(mutateRowRequest);
   }
 }
