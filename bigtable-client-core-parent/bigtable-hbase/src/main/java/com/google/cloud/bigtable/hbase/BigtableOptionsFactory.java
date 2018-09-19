@@ -45,6 +45,7 @@ import org.apache.hadoop.hbase.util.VersionInfo;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Static methods to convert an instance of {@link org.apache.hadoop.conf.Configuration}
@@ -199,6 +200,10 @@ public class BigtableOptionsFactory {
   public static final String BIGTABLE_USE_BULK_API =
       "google.bigtable.use.bulk.api";
 
+  /** Constant <code>BIGTABLE_USE_BATCH="google.bigtable.use.batch"</code> */
+  public static final String BIGTABLE_USE_BATCH =
+      "google.bigtable.use.batch";
+
   /** Constant <code>BIGTABLE_BULK_MAX_REQUEST_SIZE_BYTES="google.bigtable.bulk.max.request.size.b"{trunked}</code> */
   public static final String BIGTABLE_BULK_MAX_REQUEST_SIZE_BYTES =
       "google.bigtable.bulk.max.request.size.bytes";
@@ -316,8 +321,19 @@ public class BigtableOptionsFactory {
     setBulkOptions(configuration, bigtableOptionsBuilder);
     setChannelOptions(configuration, bigtableOptionsBuilder);
     setClientCallOptions(configuration, bigtableOptionsBuilder);
-
+    setUseBatch(configuration, bigtableOptionsBuilder);
     return bigtableOptionsBuilder.build();
+  }
+
+  private static void setUseBatch(Configuration configuration, BigtableOptions.Builder builder) {
+    if(configuration.getBoolean(BIGTABLE_USE_BATCH, false)) {
+      builder.setUseCachedDataPool(true);
+      builder.setDataHost(BigtableOptions.BIGTABLE_BATCH_DATA_HOST_DEFAULT);
+      RetryOptions.Builder retryOptionsBuilder = builder.build().getRetryOptions().toBuilder();
+      retryOptionsBuilder.setInitialBackoffMillis((int) TimeUnit.SECONDS.toMillis(5));
+      retryOptionsBuilder.setMaxElapsedBackoffMillis((int) TimeUnit.SECONDS.toMillis(5));
+      builder.setRetryOptions(retryOptionsBuilder.build());
+    }
   }
 
   private static String getValue(final Configuration configuration, String key, String type) {
