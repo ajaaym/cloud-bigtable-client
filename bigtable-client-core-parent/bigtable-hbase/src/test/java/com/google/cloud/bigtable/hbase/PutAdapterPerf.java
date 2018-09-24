@@ -18,6 +18,8 @@ package com.google.cloud.bigtable.hbase;
 import com.google.bigtable.v2.BigtableGrpc;
 import com.google.bigtable.v2.MutateRowRequest;
 import com.google.cloud.bigtable.config.BigtableOptions;
+import com.google.cloud.bigtable.data.v2.internal.RequestContext;
+import com.google.cloud.bigtable.data.v2.models.InstanceName;
 import com.google.cloud.bigtable.hbase.adapters.HBaseRequestAdapter;
 import com.google.cloud.bigtable.hbase.adapters.PutAdapter;
 
@@ -31,12 +33,13 @@ import org.apache.hadoop.hbase.util.Bytes;
  * Simple microbenchmark for {@link PutAdapter}
  */
 public class PutAdapterPerf {
+  private static RequestContext requestContext;
   public static void main(String[] args) {
     String rowKey = String.format("rowKey0");
     Put put = new Put(Bytes.toBytes(rowKey));
     byte[] value = RandomStringUtils.randomAlphanumeric(10000).getBytes();
     put.addColumn(Bytes.toBytes("Family1"), Bytes.toBytes("Qaulifier"), value);
-
+    requestContext = RequestContext.create(InstanceName.of("", ""), "");
     BigtableOptions options = BigtableOptions.builder()
         .setInstanceId("instanceId")
         .setProjectId("projectId")
@@ -52,7 +55,7 @@ public class PutAdapterPerf {
   static int count = 1_000_000;
 
   private static void putAdapterPerf(HBaseRequestAdapter adapter, Put put) {
-    System.out.println("Size: " + adapter.adapt(put).getSerializedSize());
+    System.out.println("Size: " + adapter.adapt(put).toProto(requestContext).getSerializedSize());
     System.gc();
     { 
       long start = System.nanoTime();
@@ -68,7 +71,7 @@ public class PutAdapterPerf {
     { 
       long start = System.nanoTime();
       for (int i = 0; i < count; i++) {
-        MutateRowRequest adapted = adapter.adapt(put);
+        MutateRowRequest adapted = adapter.adapt(put).toProto(requestContext);
         BigtableGrpc.getMutateRowMethod().streamRequest(adapted);
       }
       long time = System.nanoTime() - start;
@@ -80,7 +83,7 @@ public class PutAdapterPerf {
     { 
       long start = System.nanoTime();
       for (int i = 0; i < count; i++) {
-        MutateRowRequest adapted = adapter.adapt(put);
+        MutateRowRequest adapted = adapter.adapt(put).toProto(requestContext);
         adapted.getSerializedSize();
         BigtableGrpc.getMutateRowMethod().streamRequest(adapted);
       }

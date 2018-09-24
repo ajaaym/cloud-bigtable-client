@@ -277,7 +277,7 @@ public class BigtableOptionsFactory {
    */
   public static final String BIGTABLE_NAMESPACE_WARNING_KEY = "google.bigtable.namespace.warnings";
 
-  public static final String BIGTABLE_USE_HBASE_BIGTABLE_CLIENT_KEY = "google.bigtable.use.hbase.bigtable.client";
+  public static final String BIGTABLE_USE_CORE_BIGTABLE_CLIENT_KEY = "google.bigtable.use.core.bigtable.client";
 
   /**
    * <p>fromConfiguration.</p>
@@ -310,8 +310,8 @@ public class BigtableOptionsFactory {
     bigtableOptionsBuilder.setUsePlaintextNegotiation(
       configuration.getBoolean(BIGTABLE_USE_PLAINTEXT_NEGOTIATION, false));
 
-    bigtableOptionsBuilder.setUseBigtableHbaseClient(
-        configuration.getBoolean(BIGTABLE_USE_HBASE_BIGTABLE_CLIENT_KEY, false)
+    bigtableOptionsBuilder.setUseGoogleCloudJava(
+        configuration.getBoolean(BIGTABLE_USE_CORE_BIGTABLE_CLIENT_KEY, false)
     );
 
     String emulatorHost = configuration.get(BIGTABLE_EMULATOR_HOST_KEY);

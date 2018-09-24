@@ -29,6 +29,11 @@ import com.google.bigtable.v2.ReadModifyWriteRowResponse;
 import com.google.bigtable.v2.ReadRowsRequest;
 import com.google.bigtable.v2.SampleRowKeysRequest;
 import com.google.bigtable.v2.SampleRowKeysResponse;
+import com.google.cloud.bigtable.core.ClientWrapper;
+import com.google.cloud.bigtable.data.v2.models.ConditionalRowMutation;
+import com.google.cloud.bigtable.data.v2.models.ReadModifyWriteRow;
+import com.google.cloud.bigtable.data.v2.models.Row;
+import com.google.cloud.bigtable.data.v2.models.RowMutation;
 import com.google.cloud.bigtable.grpc.scanner.FlatRow;
 
 /**
@@ -40,9 +45,12 @@ import com.google.cloud.bigtable.grpc.scanner.FlatRow;
 public class BigtableDataClient {
 
   private final com.google.cloud.bigtable.grpc.BigtableDataClient dataClient;
+  private final ClientWrapper clientWrapper;
 
-  public BigtableDataClient(com.google.cloud.bigtable.grpc.BigtableDataClient dataClient) {
+  public BigtableDataClient(com.google.cloud.bigtable.grpc.BigtableDataClient dataClient,
+      ClientWrapper clientWrapper) {
     this.dataClient = dataClient;
+    this.clientWrapper = clientWrapper;
   }
 
   /**
@@ -52,8 +60,9 @@ public class BigtableDataClient {
    * the mutation has completed.
    * @param request a {@link com.google.bigtable.v2.MutateRowRequest} object.
    */
-  public CompletableFuture<MutateRowResponse> mutateRowAsync(MutateRowRequest request) {
-    return toCompletableFuture(dataClient.mutateRowAsync(request));
+  public CompletableFuture<Void> mutateRowAsync(RowMutation rowMutation)
+      throws InterruptedException {
+    return toCompletableFuture(clientWrapper.mutateRowAsync(rowMutation));
   }
 
   /**
@@ -63,9 +72,9 @@ public class BigtableDataClient {
    * the mutation has completed.
    * @param request a {@link com.google.bigtable.v2.CheckAndMutateRowRequest} object.
    */
-  public CompletableFuture<CheckAndMutateRowResponse> checkAndMutateRowAsync(
-      CheckAndMutateRowRequest request){
-    return toCompletableFuture(dataClient.checkAndMutateRowAsync(request));
+  public CompletableFuture<Boolean> checkAndMutateRowAsync(
+      ConditionalRowMutation request){
+    return toCompletableFuture(clientWrapper.checkAndMutateRowAsync(request));
   }
 
   /**
@@ -75,9 +84,9 @@ public class BigtableDataClient {
    * the mutation has completed.
    * @param request a {@link com.google.bigtable.v2.ReadModifyWriteRowRequest} object.
    */
-  public CompletableFuture<ReadModifyWriteRowResponse>
-      readModifyWriteRowAsync(ReadModifyWriteRowRequest request){
-    return toCompletableFuture(dataClient.readModifyWriteRowAsync(request));
+  public CompletableFuture<Row>
+      readModifyWriteRowAsync(ReadModifyWriteRow request) throws InterruptedException {
+    return toCompletableFuture(clientWrapper.readModifyWriteRowAsync(request));
   }
 
   /**

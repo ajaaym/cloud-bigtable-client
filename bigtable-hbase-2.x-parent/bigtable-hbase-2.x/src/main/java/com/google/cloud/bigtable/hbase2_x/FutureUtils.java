@@ -18,6 +18,9 @@ package com.google.cloud.bigtable.hbase2_x;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 
+import com.google.api.core.ApiFuture;
+import com.google.api.core.ApiFutureCallback;
+import com.google.api.core.ApiFutures;
 import com.google.cloud.bigtable.config.Logger;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
@@ -57,6 +60,28 @@ public class FutureUtils {
     };
     Futures.addCallback(listenableFuture, callback);
 
+    return completableFuture;
+  }
+
+  public static <T> CompletableFuture<T> toCompletableFuture(ApiFuture<T> apiFuture) {
+    CompletableFuture<T> completableFuture = new CompletableFuture<T>() {
+      @Override
+      public boolean cancel(boolean mayInterruptIfRunning) {
+        boolean result = apiFuture.cancel(mayInterruptIfRunning);
+        super.cancel(mayInterruptIfRunning);
+        return result;
+      }
+    };
+    ApiFutureCallback<T> callback = new ApiFutureCallback<T>() {
+      @Override public void onFailure(Throwable throwable) {
+        completableFuture.completeExceptionally(throwable);
+      }
+
+      @Override public void onSuccess(T result) {
+        completableFuture.complete(result);
+      }
+    };
+    ApiFutures.addCallback(apiFuture, callback, DIRECT_EXECUTOR);
     return completableFuture;
   }
 

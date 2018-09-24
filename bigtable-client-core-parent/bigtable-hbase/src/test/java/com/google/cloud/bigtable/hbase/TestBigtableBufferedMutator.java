@@ -25,7 +25,13 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeoutException;
 
+import com.google.api.core.ApiFuture;
+import com.google.api.core.ApiFutures;
+import com.google.api.core.ListenableFutureToApiFuture;
+import com.google.cloud.bigtable.data.v2.models.RowMutation;
+import com.google.common.util.concurrent.ListenableFuture;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Append;
@@ -50,7 +56,6 @@ import com.google.cloud.bigtable.config.BigtableOptions;
 import com.google.cloud.bigtable.grpc.BigtableSession;
 import com.google.cloud.bigtable.grpc.BigtableTableName;
 import com.google.cloud.bigtable.grpc.async.AsyncExecutor;
-import com.google.cloud.bigtable.grpc.async.BulkMutation;
 import com.google.cloud.bigtable.hbase.adapters.HBaseRequestAdapter;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.SettableFuture;
@@ -73,10 +78,12 @@ public class TestBigtableBufferedMutator {
   private AsyncExecutor mockAsyncExecutor;
 
   @Mock
-  private BulkMutation mockBulkMutation;
+  private com.google.cloud.bigtable.core.BulkMutation mockBulkMutation;
 
   @SuppressWarnings("rawtypes")
-  private SettableFuture future = SettableFuture.create();
+  private ApiFuture future = new ListenableFutureToApiFuture(SettableFuture.create());
+
+  private ListenableFuture listenableFuture = SettableFuture.create();
 
   @Mock
   private BufferedMutator.ExceptionListener listener;
@@ -113,26 +120,26 @@ public class TestBigtableBufferedMutator {
 
   @Test
   public void testPut() throws IOException, InterruptedException {
-    when(mockBulkMutation.add(any(MutateRowsRequest.Entry.class))).thenReturn(future);
+    when(mockBulkMutation.add(any(RowMutation.class))).thenReturn(future);
     BigtableBufferedMutator underTest = createMutator(new Configuration(false));
     underTest.mutate(SIMPLE_PUT);
     verify(mockAsyncExecutor, times(0)).mutateRowAsync(any(MutateRowRequest.class));
-    verify(mockBulkMutation, times(1)).add(any(MutateRowsRequest.Entry.class));
+    verify(mockBulkMutation, times(1)).add(any(RowMutation.class));
   }
 
   @Test
   public void testDelete() throws IOException, InterruptedException {
-    when(mockBulkMutation.add(any(MutateRowsRequest.Entry.class))).thenReturn(future);
+    when(mockBulkMutation.add(any(RowMutation.class))).thenReturn(future);
     BigtableBufferedMutator underTest = createMutator(new Configuration(false));
     underTest.mutate(new Delete(EMPTY_BYTES));
     verify(mockAsyncExecutor, times(0)).mutateRowAsync(any(MutateRowRequest.class));
-    verify(mockBulkMutation, times(1)).add(any(MutateRowsRequest.Entry.class));
+    verify(mockBulkMutation, times(1)).add(any(RowMutation.class));
   }
 
   @Test
   public void testIncrement() throws IOException, InterruptedException {
     when(mockAsyncExecutor.readModifyWriteRowAsync(any(ReadModifyWriteRowRequest.class)))
-        .thenReturn(future);
+        .thenReturn(listenableFuture);
     BigtableBufferedMutator underTest = createMutator(new Configuration(false));
     underTest.mutate(new Increment(EMPTY_BYTES).addColumn(EMPTY_BYTES, EMPTY_BYTES, 1));
     verify(mockAsyncExecutor, times(1))
@@ -142,7 +149,7 @@ public class TestBigtableBufferedMutator {
   @Test
   public void testAppend() throws IOException, InterruptedException {
     when(mockAsyncExecutor.readModifyWriteRowAsync(any(ReadModifyWriteRowRequest.class)))
-        .thenReturn(future);
+        .thenReturn(listenableFuture);
     BigtableBufferedMutator underTest = createMutator(new Configuration(false));
     underTest.mutate(new Append(EMPTY_BYTES).add(EMPTY_BYTES, EMPTY_BYTES, EMPTY_BYTES));
     verify(mockAsyncExecutor, times(1))
@@ -150,8 +157,8 @@ public class TestBigtableBufferedMutator {
   }
   @Test
   public void testInvalidPut() throws Exception {
-    when(mockBulkMutation.add(any(MutateRowsRequest.Entry.class)))
-        .thenReturn(Futures.<MutateRowResponse> immediateFailedFuture(new RuntimeException()));
+    when(mockBulkMutation.add(any(RowMutation.class)))
+        .thenReturn(ApiFutures.<Void>immediateFailedFuture(new RuntimeException()));
     BigtableBufferedMutator underTest = createMutator(new Configuration(false));
     underTest.mutate(SIMPLE_PUT);
     // Leave some time for the async worker to handle the request.
@@ -163,28 +170,29 @@ public class TestBigtableBufferedMutator {
   }
 
   @Test
-  public void testBulkSingleRequests() throws IOException, InterruptedException {
+  public void testBulkSingleRequests() throws IOException, InterruptedException, TimeoutException {
     Configuration config = new Configuration(false);
-    when(mockBulkMutation.add(any(MutateRowsRequest.Entry.class))).thenReturn(future);
+    when(mockBulkMutation.add(any(RowMutation.class))).thenReturn(future);
     final BigtableBufferedMutator underTest = createMutator(config);
     underTest.mutate(SIMPLE_PUT);
     verify(mockAsyncExecutor, times(0)).mutateRowAsync(any(MutateRowRequest.class));
-    verify(mockBulkMutation, times(1)).add(any(MutateRowsRequest.Entry.class));
+    verify(mockBulkMutation, times(1)).add(any(RowMutation.class));
     underTest.flush();
     verify(mockBulkMutation, times(1)).flush();
     verify(mockAsyncExecutor, times(1)).flush();
   }
 
   @Test
-  public void testBulkMultipleRequests() throws IOException, InterruptedException {
+  public void testBulkMultipleRequests() throws IOException, InterruptedException,
+      TimeoutException {
     Configuration config = new Configuration(false);
-    when(mockBulkMutation.add(any(MutateRowsRequest.Entry.class))).thenReturn(future);
+    when(mockBulkMutation.add(any(RowMutation.class))).thenReturn(future);
     BigtableBufferedMutator underTest = createMutator(config);
     int count = 30;
     for (int i = 0; i < count; i++) {
       underTest.mutate(SIMPLE_PUT);
     }
-    verify(mockBulkMutation, times(count)).add(any(MutateRowsRequest.Entry.class));
+    verify(mockBulkMutation, times(count)).add(any(RowMutation.class));
     underTest.flush();
     verify(mockBulkMutation, times(1)).flush();
     verify(mockAsyncExecutor, times(1)).flush();

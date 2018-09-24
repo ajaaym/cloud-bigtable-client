@@ -18,10 +18,22 @@ package com.google.cloud.bigtable.grpc;
 import static com.google.cloud.bigtable.grpc.io.GoogleCloudResourcePrefixInterceptor.GRPC_RESOURCE_PREFIX_KEY;
 
 import com.google.api.core.ApiClock;
+import com.google.api.core.ApiFuture;
+import com.google.api.core.ListenableFutureToApiFuture;
 import com.google.api.core.NanoClock;
+import com.google.bigtable.v2.Cell;
+import com.google.bigtable.v2.Column;
+import com.google.bigtable.v2.Family;
+import com.google.cloud.bigtable.core.BulkMutation;
+import com.google.cloud.bigtable.core.ClientWrapper;
 import com.google.cloud.bigtable.data.v2.internal.RequestContext;
+import com.google.cloud.bigtable.data.v2.models.ConditionalRowMutation;
 import com.google.cloud.bigtable.data.v2.models.InstanceName;
+import com.google.cloud.bigtable.data.v2.models.ReadModifyWriteRow;
+import com.google.cloud.bigtable.data.v2.models.RowCell;
 import com.google.cloud.bigtable.data.v2.models.RowMutation;
+import com.google.common.util.concurrent.FutureCallback;
+import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.Metadata;
@@ -29,6 +41,7 @@ import io.grpc.MethodDescriptor;
 import io.grpc.stub.StreamObserver;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
@@ -84,7 +97,7 @@ import com.google.common.util.concurrent.ListenableFuture;
  * @author sduskis
  * @version $Id: $Id
  */
-public class BigtableDataGrpcClient implements BigtableDataClient {
+public class BigtableDataGrpcClient implements BigtableDataClient, ClientWrapper {
 
   private final static ApiClock CLOCK = NanoClock.getDefaultClock();
 
@@ -520,5 +533,97 @@ public class BigtableDataGrpcClient implements BigtableDataClient {
   public void mutateRow(RowMutation rowMutation) throws ExecutionException, InterruptedException{
     MutateRowRequest mutateRowRequest = rowMutation.toProto(requestContext);
     mutateRow(mutateRowRequest);
+  }
+
+  @Override public ApiFuture<Void> mutateRowAsync(RowMutation rowMutation)
+      throws InterruptedException {
+    ListenableFuture<MutateRowResponse> listenableFuture = mutateRowAsync(rowMutation.toProto(requestContext));
+    return convertToVoidApiFuture(listenableFuture, new Function<MutateRowResponse, Void>() {
+      @Nullable @Override public Void apply(@Nullable MutateRowResponse input) {
+        return null;
+      }
+    });
+  }
+
+  @Override
+  public com.google.cloud.bigtable.data.v2.models.Row readModifyWriteRow(ReadModifyWriteRow mutation)
+      throws ExecutionException, InterruptedException {
+    ReadModifyWriteRowResponse readModifyWriteRowResponse = readModifyWriteRow(mutation.toProto(requestContext));
+    return rowTransform.apply(readModifyWriteRowResponse);
+  }
+
+  @Override
+  public ApiFuture<com.google.cloud.bigtable.data.v2.models.Row> readModifyWriteRowAsync(ReadModifyWriteRow mutation)
+      throws InterruptedException {
+    ListenableFuture<ReadModifyWriteRowResponse> listenableFuture= readModifyWriteRowAsync(mutation.toProto(requestContext));
+    return convertToVoidApiFuture(listenableFuture, rowTransform);
+  }
+
+  @Override public BulkMutation createBulkMutationBatcher() {
+    return null;
+  }
+
+  @Override public ApiFuture<Boolean> checkAndMutateRowAsync(ConditionalRowMutation mutation) {
+    final CheckAndMutateRowRequest checkAndMutateRowRequest = mutation.toProto(requestContext);
+    ListenableFuture<CheckAndMutateRowResponse> listenableFuture = checkAndMutateRowAsync(checkAndMutateRowRequest);
+    return convertToVoidApiFuture(listenableFuture, new Function<CheckAndMutateRowResponse, Boolean>() {
+      @Nullable @Override public Boolean apply(@Nullable CheckAndMutateRowResponse input) {
+        return verifyCheckAndMutateApplied(checkAndMutateRowRequest, input);
+      }
+    });
+  }
+
+  @Override public Boolean checkAndMutateRow(ConditionalRowMutation mutation)
+      throws ExecutionException, InterruptedException {
+    final CheckAndMutateRowRequest checkAndMutateRowRequest = mutation.toProto(requestContext);
+    CheckAndMutateRowResponse checkAndMutateRowResponse = checkAndMutateRow(checkAndMutateRowRequest);
+    return verifyCheckAndMutateApplied(checkAndMutateRowRequest, checkAndMutateRowResponse);
+  }
+
+  private static boolean verifyCheckAndMutateApplied(CheckAndMutateRowRequest checkAndMutateRowRequest, CheckAndMutateRowResponse checkAndMutateRowResponse) {
+    return (checkAndMutateRowRequest.getTrueMutationsCount() > 0
+        && checkAndMutateRowResponse.getPredicateMatched())
+        || (checkAndMutateRowRequest.getFalseMutationsCount() > 0
+        && !checkAndMutateRowResponse.getPredicateMatched());
+  }
+
+  private static final Function<ReadModifyWriteRowResponse, com.google.cloud.bigtable.data.v2.models.Row> rowTransform
+      = new Function<ReadModifyWriteRowResponse, com.google.cloud.bigtable.data.v2.models.Row>() {
+    @Nullable @Override public com.google.cloud.bigtable.data.v2.models.Row apply(
+        @Nullable ReadModifyWriteRowResponse input) {
+      List<RowCell> rowCells = new ArrayList<>(input.getRow().getFamiliesCount());
+      for(Family family : input.getRow().getFamiliesList()) {
+        for(Column column : family.getColumnsList()) {
+          for(Cell cell : column.getCellsList()) {
+            RowCell rowCell = RowCell.create(
+                family.getName(),
+                column.getQualifier(),
+                cell.getTimestampMicros(),
+                cell.getLabelsList(),
+                cell.getValue()
+            );
+            rowCells.add(rowCell);
+          }
+
+        }
+      }
+      com.google.cloud.bigtable.data.v2.models.Row row = com.google.cloud.bigtable.data.v2.models.Row.create(input.getRow().getKey(), rowCells);
+      return row;
+    }
+  };
+
+  private static <I,O> ApiFuture<O> convertToVoidApiFuture(ListenableFuture<I> listenableFuture, final Function<I, O> function) {
+    final SettableFuture<O> settableFuture = SettableFuture.create();
+    Futures.addCallback(listenableFuture, new FutureCallback<I>() {
+
+      @Override public void onSuccess(@Nullable I result) {
+        settableFuture.set(function.apply(result));
+      }
+
+      @Override public void onFailure(Throwable t) {
+        settableFuture.setException(t);
+      }
+    });
+    return new ListenableFutureToApiFuture<>(settableFuture);
   }
 }

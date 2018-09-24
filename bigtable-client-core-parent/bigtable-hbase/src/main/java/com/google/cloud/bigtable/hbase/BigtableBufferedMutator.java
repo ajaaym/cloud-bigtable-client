@@ -18,8 +18,12 @@ package com.google.cloud.bigtable.hbase;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import com.google.api.core.ApiFuture;
+import com.google.api.core.ApiFutureCallback;
+import com.google.api.core.ApiFutures;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.BufferedMutator;
@@ -84,14 +88,22 @@ public class BigtableBufferedMutator implements BufferedMutator {
   /** {@inheritDoc} */
   @Override
   public void close() throws IOException {
-    helper.close();
+    try {
+      helper.close();
+    } catch (TimeoutException e) {
+      e.printStackTrace();
+    }
     handleExceptions();
   }
 
   /** {@inheritDoc} */
   @Override
   public void flush() throws IOException {
-    helper.flush();
+    try {
+      helper.flush();
+    } catch (TimeoutException e) {
+      e.printStackTrace();
+    }
     handleExceptions();
   }
 
@@ -117,7 +129,7 @@ public class BigtableBufferedMutator implements BufferedMutator {
   @Override
   public void mutate(List<? extends Mutation> mutations) throws IOException {
     handleExceptions();
-    List<ListenableFuture<?>> futures = helper.mutate(mutations);
+    List<ApiFuture<?>> futures = helper.mutate(mutations);
     for (int i = 0; i < mutations.size(); i++) {
       addCallback(futures.get(i), mutations.get(i));
     }
@@ -148,8 +160,8 @@ public class BigtableBufferedMutator implements BufferedMutator {
   }
 
   @SuppressWarnings("unchecked")
-  private void addCallback(ListenableFuture<?> future, Mutation mutation) {
-    Futures.addCallback(future, new ExceptionCallback(mutation), MoreExecutors.directExecutor());
+  private void addCallback(ApiFuture<?> future, Mutation mutation) {
+    ApiFutures.addCallback(future, new ExceptionCallback(mutation), MoreExecutors.directExecutor());
   }
 
   /**
@@ -200,7 +212,7 @@ public class BigtableBufferedMutator implements BufferedMutator {
   }
 
   @SuppressWarnings("rawtypes")
-  private class ExceptionCallback implements FutureCallback {
+  private class ExceptionCallback implements ApiFutureCallback {
     private final Row mutation;
 
     public ExceptionCallback(Row mutation) {

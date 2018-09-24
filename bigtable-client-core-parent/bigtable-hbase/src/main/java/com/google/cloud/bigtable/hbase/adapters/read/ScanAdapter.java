@@ -104,6 +104,11 @@ public class ScanAdapter implements ReadOperationAdapter<Scan> {
    * @return a {@link com.google.bigtable.v2.RowFilter} object.
    */
   public RowFilter buildFilter(Scan scan, ReadHooks hooks) {
+
+    return buildModelFilter(scan, hooks).toProto();
+  }
+
+  public Filters.Filter buildModelFilter(Scan scan, ReadHooks hooks) {
     ChainFilter chain = FILTERS.chain();
     Optional<Filters.Filter> familyFilter = createColumnFamilyFilter(scan);
     if (familyFilter.isPresent()) {
@@ -123,7 +128,7 @@ public class ScanAdapter implements ReadOperationAdapter<Scan> {
       chain.filter(FILTERS.fromProto(userFilter.get()));
     }
 
-    return chain.toProto();
+    return chain;
   }
 
   /** {@inheritDoc} */

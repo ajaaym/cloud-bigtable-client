@@ -42,7 +42,7 @@ import io.grpc.stub.StreamObserver;
  * @author sduskis
  * @version $Id: $Id
  */
-public interface BigtableDataClient extends BigtableDataClientCore{
+public interface BigtableDataClient {
 
   /**
    * Mutate a row atomically.

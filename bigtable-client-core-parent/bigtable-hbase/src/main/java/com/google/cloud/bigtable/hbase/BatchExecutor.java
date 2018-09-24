@@ -22,6 +22,8 @@ import java.util.concurrent.ExecutionException;
 
 import javax.annotation.Nullable;
 
+import com.google.api.core.ApiFuture;
+import com.google.api.core.ApiFutureToListenableFuture;
 import org.apache.hadoop.hbase.client.Append;
 import org.apache.hadoop.hbase.client.Delete;
 import org.apache.hadoop.hbase.client.Get;
@@ -40,7 +42,6 @@ import com.google.cloud.bigtable.config.Logger;
 import com.google.cloud.bigtable.grpc.BigtableSession;
 import com.google.cloud.bigtable.grpc.BigtableTableName;
 import com.google.cloud.bigtable.grpc.async.AsyncExecutor;
-import com.google.cloud.bigtable.grpc.async.BulkMutation;
 import com.google.cloud.bigtable.grpc.async.BulkRead;
 import com.google.cloud.bigtable.grpc.scanner.FlatRow;
 import com.google.cloud.bigtable.hbase.adapters.Adapters;
@@ -135,7 +136,7 @@ public class BatchExecutor {
   }
 
   protected static class BulkOperation {
-    private BulkMutation bulkMutation;
+    private com.google.cloud.bigtable.core.BulkMutation bulkMutation;
     private BulkRead bulkRead;
 
     protected BulkOperation(
@@ -203,15 +204,22 @@ public class BatchExecutor {
       if (row instanceof Get) {
         return bulkOperation.bulkRead.add(requestAdapter.adapt((Get) row));
       } else if (row instanceof Put) {
-        return bulkOperation.bulkMutation.add(requestAdapter.adaptEntry((Put) row));
+        ApiFuture<Void> apiFuture = bulkOperation.bulkMutation.add(requestAdapter.adaptEntry((Put) row));
+        return new ApiFutureToListenableFuture<>(apiFuture);
       } else if (row instanceof Delete) {
-        return bulkOperation.bulkMutation.add(requestAdapter.adaptEntry((Delete) row));
+        ApiFuture<Void> apiFuture = bulkOperation.bulkMutation.add(requestAdapter.adaptEntry((Delete) row));
+        return new ApiFutureToListenableFuture<>(apiFuture);
       } else if (row instanceof Append) {
-        return asyncExecutor.readModifyWriteRowAsync(requestAdapter.adapt((Append) row));
+        ApiFuture<com.google.cloud.bigtable.data.v2.models.Row> apiFuture
+            = session.getClientWrapper().readModifyWriteRowAsync(requestAdapter.adapt((Append) row));
+        return new ApiFutureToListenableFuture<>(apiFuture);
       } else if (row instanceof Increment) {
-        return asyncExecutor.readModifyWriteRowAsync(requestAdapter.adapt((Increment) row));
+        ApiFuture<com.google.cloud.bigtable.data.v2.models.Row> apiFuture
+            =  session.getClientWrapper().readModifyWriteRowAsync(requestAdapter.adapt((Increment) row));
+        return new ApiFutureToListenableFuture<>(apiFuture);
       } else if (row instanceof RowMutations) {
-        return bulkOperation.bulkMutation.add(requestAdapter.adaptEntry((RowMutations) row));
+        ApiFuture<Void> apiFuture = bulkOperation.bulkMutation.add(requestAdapter.adaptEntry((RowMutations) row));
+        return new ApiFutureToListenableFuture<>(apiFuture);
       }
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();

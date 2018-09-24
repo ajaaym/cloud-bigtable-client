@@ -30,6 +30,8 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+import com.google.api.core.ApiFuture;
+import com.google.cloud.bigtable.data.v2.models.RowMutation;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -92,7 +94,7 @@ public class TestBulkMutationAwaitCompletion {
   private List<Runnable> timeoutRunnables;
   private ScheduledExecutorService testExecutor;
   private List<OperationAccountant> accountants;
-  private List<ListenableFuture<MutateRowResponse>> singleMutationFutures;
+  private List<ApiFuture<Void>> singleMutationFutures;
   private Logger originalBulkMutatorLog;
   private Logger originalOperationAccountantLog;
 
@@ -105,7 +107,7 @@ public class TestBulkMutationAwaitCompletion {
     timeoutRunnables = Collections.synchronizedList(new ArrayList<Runnable>());
     accountants = Collections.synchronizedList(new ArrayList<OperationAccountant>());
     singleMutationFutures =
-        Collections.synchronizedList(new ArrayList<ListenableFuture<MutateRowResponse>>());
+        Collections.synchronizedList(new ArrayList<ApiFuture<Void>>());
 
     // Keep track of methods of completing mutateRowsAsync calls.  This method will add a Runnable
     // that can set the correct value of the MutateRowsResponse future.
@@ -180,7 +182,8 @@ public class TestBulkMutationAwaitCompletion {
    * @throws ExecutionException
    */
   @Test
-  public void testBulkMutationNoCompletions() throws InterruptedException, ExecutionException {
+  public void testBulkMutationNoCompletions()
+      throws InterruptedException, ExecutionException, TimeoutException {
     int count = 100;
 
     for (int i = 0; i < count; i++) {
@@ -221,6 +224,8 @@ public class TestBulkMutationAwaitCompletion {
               runOneBulkMutation();
             } catch (InterruptedException e) {
               // TODO(sduskis): Auto-generated catch block
+              e.printStackTrace();
+            } catch (TimeoutException e) {
               e.printStackTrace();
             }
           }
@@ -272,12 +277,12 @@ public class TestBulkMutationAwaitCompletion {
    * it.
    * @throws InterruptedException 
    */
-  private void runOneBulkMutation() throws InterruptedException {
-    MutateRowsRequest.Entry entry = TestBulkMutation.createRequestEntry();
+  private void runOneBulkMutation() throws InterruptedException, TimeoutException {
+    RowMutation rowMutation = TestBulkMutation.createRequestEntry();
     OperationAccountant accountant = createOperationAccountant();
-    BulkMutation bulkMutation = createBulkMutation(accountant);
+    com.google.cloud.bigtable.core.BulkMutation bulkMutation = createBulkMutation(accountant);
     for (int i = 0; i < OPERATIONS_PER_MUTATOR; i++) {
-      singleMutationFutures.add(bulkMutation.add(entry));
+      singleMutationFutures.add(bulkMutation.add(rowMutation));
     }
     bulkMutation.flush();
     accountants.add(accountant);
@@ -287,7 +292,7 @@ public class TestBulkMutationAwaitCompletion {
     return new OperationAccountant(clock, OperationAccountant.DEFAULT_FINISH_WAIT_MILLIS);
   }
 
-  protected BulkMutation createBulkMutation(OperationAccountant operationAccountant) {
+  protected com.google.cloud.bigtable.core.BulkMutation createBulkMutation(OperationAccountant operationAccountant) {
     BulkOptions options = BulkOptions.builder()
         .setBulkMaxRowKeyCount(MUTATIONS_PER_RPC)
         .setBulkMaxRequestSize(1000000000)
@@ -329,7 +334,7 @@ public class TestBulkMutationAwaitCompletion {
     for (OperationAccountant accountant : accountants) {
       Assert.assertFalse(accountant.hasInflightOperations());
     }
-    for (ListenableFuture<MutateRowResponse> future : singleMutationFutures) {
+    for (ApiFuture<Void> future : singleMutationFutures) {
       Assert.assertTrue(future.isDone());
     }
   }

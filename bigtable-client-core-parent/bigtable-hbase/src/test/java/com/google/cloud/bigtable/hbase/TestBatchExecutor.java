@@ -24,15 +24,16 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.google.api.core.ApiFuture;
 import com.google.bigtable.v2.MutateRowRequest;
 import com.google.bigtable.v2.MutateRowsRequest;
 import com.google.bigtable.v2.ReadModifyWriteRowRequest;
 import com.google.bigtable.v2.ReadRowsRequest;
 import com.google.cloud.bigtable.config.BigtableOptions;
+import com.google.cloud.bigtable.data.v2.models.RowMutation;
 import com.google.cloud.bigtable.grpc.BigtableSession;
 import com.google.cloud.bigtable.grpc.BigtableTableName;
 import com.google.cloud.bigtable.grpc.async.AsyncExecutor;
-import com.google.cloud.bigtable.grpc.async.BulkMutation;
 import com.google.cloud.bigtable.grpc.async.BulkRead;
 import com.google.cloud.bigtable.grpc.scanner.FlatRow;
 import com.google.cloud.bigtable.grpc.scanner.FlatRow.Cell;
@@ -126,10 +127,13 @@ public class TestBatchExecutor {
   private BulkRead mockBulkRead;
 
   @Mock
-  private BulkMutation mockBulkMutation;
+  private com.google.cloud.bigtable.core.BulkMutation mockBulkMutation;
 
   @Mock
   private ListenableFuture mockFuture;
+
+  @Mock
+  private ApiFuture mockApiFuture;
 
   private HBaseRequestAdapter requestAdapter;
   @Before
@@ -142,7 +146,7 @@ public class TestBatchExecutor {
         new HBaseRequestAdapter(options, TableName.valueOf("table"), new Configuration(false));
 
     MockitoAnnotations.initMocks(this);
-    when(mockBulkMutation.add(any(MutateRowsRequest.Entry.class))).thenReturn(mockFuture);
+    when(mockBulkMutation.add(any(RowMutation.class))).thenReturn(mockApiFuture);
     when(mockAsyncExecutor.readModifyWriteRowAsync(any(ReadModifyWriteRowRequest.class))).thenReturn(mockFuture);
     when(mockBigtableSession.createAsyncExecutor()).thenReturn(mockAsyncExecutor);
     when(mockBigtableSession.createBulkMutation(any(BigtableTableName.class))).thenReturn(mockBulkMutation);

@@ -26,6 +26,8 @@ import com.google.cloud.bigtable.config.BulkOptions;
 import com.google.cloud.bigtable.config.CredentialOptions;
 import com.google.cloud.bigtable.config.Logger;
 import com.google.cloud.bigtable.config.RetryOptions;
+import com.google.cloud.bigtable.core.BigtableDataClientWrapper;
+import com.google.cloud.bigtable.core.ClientWrapper;
 import com.google.cloud.bigtable.grpc.async.AsyncExecutor;
 import com.google.cloud.bigtable.grpc.async.BulkMutation;
 import com.google.cloud.bigtable.grpc.async.BulkRead;
@@ -150,7 +152,9 @@ public class BigtableSession implements Closeable {
   }
 
   private Watchdog watchdog;
-  private final BigtableDataClientCore dataClient;
+  private final BigtableDataClient dataClient;
+
+  private final ClientWrapper clientWrapper;
 
   // This BigtableDataClient has an additional throttling interceptor, which is not recommended for
   // synchronous operations.
@@ -222,11 +226,14 @@ public class BigtableSession implements Closeable {
     // More often than not, users want the dataClient. Create a new one in the constructor.
     CallOptionsFactory.ConfiguredCallOptionsFactory callOptionsFactory =
         new CallOptionsFactory.ConfiguredCallOptionsFactory(options.getCallOptionsConfig());
-    if(opts.isUseBigtableHbaseClient()) {
-      dataClient = new BigtableDataGrpcClient(dataChannel, sharedPools.getRetryExecutor(), options);
-      ((BigtableDataClient) dataClient).setCallOptionsFactory(callOptionsFactory);
+
+    dataClient = new BigtableDataGrpcClient(dataChannel, sharedPools.getRetryExecutor(), options);
+    dataClient.setCallOptionsFactory(callOptionsFactory);
+
+    if(opts.isUseGoogleCloudJava()) {
+      clientWrapper = new BigtableDataClientWrapper(opts);
     } else {
-      dataClient = new BigtableDataClientCoreImpl(opts);
+      clientWrapper = (ClientWrapper) dataClient;
     }
 
     // Async operations can run amok, so they need to have some throttling. The throttling is
@@ -300,7 +307,16 @@ public class BigtableSession implements Closeable {
    * @return a {@link com.google.cloud.bigtable.grpc.BigtableDataClient} object.
    */
   public BigtableDataClient getDataClient() {
-    return (BigtableDataClient) dataClient;
+    return dataClient;
+  }
+
+  /**
+   * <p>Getter for the field <code>ClientWrapper</code>.</p>
+   *
+   * @return a {@link ClientWrapper} object.
+   */
+  public ClientWrapper getClientWrapper() {
+    return clientWrapper;
   }
 
   /**
@@ -321,7 +337,7 @@ public class BigtableSession implements Closeable {
    * @deprecated use {@link #createBulkMutation(BigtableTableName)} instead.
    */
   @Deprecated
-  public BulkMutation createBulkMutation(BigtableTableName tableName, AsyncExecutor asyncExecutor) {
+  public com.google.cloud.bigtable.core.BulkMutation createBulkMutation(BigtableTableName tableName, AsyncExecutor asyncExecutor) {
     return createBulkMutation(tableName);
   }
 
@@ -331,12 +347,17 @@ public class BigtableSession implements Closeable {
    * @param tableName a {@link com.google.cloud.bigtable.grpc.BigtableTableName} object.
    * @return a {@link com.google.cloud.bigtable.grpc.async.BulkMutation} object.
    */
-  public BulkMutation createBulkMutation(BigtableTableName tableName) {
-    return new BulkMutation(
-        tableName,
-        throttlingDataClient,
-        BigtableSessionSharedThreadPools.getInstance().getRetryExecutor(),
-        options.getBulkOptions());
+  public com.google.cloud.bigtable.core.BulkMutation createBulkMutation(BigtableTableName tableName) {
+    if(options.isUseGoogleCloudJava()) {
+      return clientWrapper.createBulkMutationBatcher();
+    } else {
+      return new BulkMutation(
+          tableName,
+          throttlingDataClient,
+          BigtableSessionSharedThreadPools.getInstance().getRetryExecutor(),
+          options.getBulkOptions());
+    }
+
   }
 
   /**

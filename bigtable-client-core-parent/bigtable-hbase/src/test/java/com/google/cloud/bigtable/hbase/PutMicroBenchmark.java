@@ -18,6 +18,8 @@ package com.google.cloud.bigtable.hbase;
 import com.google.bigtable.v2.MutateRowRequest;
 import com.google.bigtable.v2.MutateRowResponse;
 import com.google.cloud.bigtable.config.BigtableOptions;
+import com.google.cloud.bigtable.data.v2.internal.RequestContext;
+import com.google.cloud.bigtable.data.v2.models.InstanceName;
 import com.google.cloud.bigtable.grpc.BigtableDataClient;
 import com.google.cloud.bigtable.grpc.BigtableDataGrpcClient;
 import com.google.cloud.bigtable.grpc.BigtableSession;
@@ -50,7 +52,7 @@ public class PutMicroBenchmark {
   private final static int FAKE_CHANNEL_PUT_COUNT = 100_000;
   private static final int VALUE_SIZE = 100;
   private static BigtableOptions options;
-
+  private static RequestContext requestContext;
   public static void main(String[] args) throws Exception {
     String projectId = args.length > 0 ? args[0] : "project";
     String instanceId = args.length > 1 ? args[1] : "instanceId";
@@ -63,6 +65,7 @@ public class PutMicroBenchmark {
         .build();
     boolean useRealConnection = args.length >= 2;
     int putCount = useRealConnection ? REAL_CHANNEL_PUT_COUNT : FAKE_CHANNEL_PUT_COUNT;
+    requestContext = RequestContext.create(InstanceName.of(projectId, instanceId), "");
     HBaseRequestAdapter hbaseAdapter =
         new HBaseRequestAdapter(options, TableName.valueOf(tableId), new Configuration(false));
 
@@ -70,7 +73,7 @@ public class PutMicroBenchmark {
 
     Put put = createPut();
     System.out.println(String.format("Put size: %d, proto size: %d", put.heapSize(),
-      hbaseAdapter.adapt(put).getSerializedSize()));
+      hbaseAdapter.adapt(put).toProto(requestContext).getSerializedSize()));
     run(hbaseAdapter, put, getChannelPool(useRealConnection), putCount);
   }
 
@@ -128,7 +131,7 @@ public class PutMicroBenchmark {
       public void run() {
         long start = System.nanoTime();
         for (int i = 0; i < putCount; i++) {
-          client.mutateRow(hbaseAdapter.adapt(put));
+          client.mutateRow(hbaseAdapter.adapt(put).toProto(requestContext));
         }
         print("constantly adapted", start, putCount);
       }
@@ -138,7 +141,7 @@ public class PutMicroBenchmark {
       @Override
       public void run() {
         long start = System.nanoTime();
-        final MutateRowRequest adapted = hbaseAdapter.adapt(put);
+        final MutateRowRequest adapted = hbaseAdapter.adapt(put).toProto(requestContext);
         for (int i = 0; i < putCount; i++) {
           client.mutateRow(adapted);
         }

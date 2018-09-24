@@ -104,7 +104,7 @@ public class BigtableOptions implements Serializable, Cloneable {
       // the Google Compute Engine metadata service or gcloud configuration in other environments. A
       // user can also override the default behavior with P12 or JSON configuration.
       options.credentialOptions = CredentialOptions.defaultCredentials();
-      options.useBigtableHbaseClient = false;
+      options.useGoogleCloudJava = false;
     }
 
     private Builder(BigtableOptions options) {
@@ -176,8 +176,8 @@ public class BigtableOptions implements Serializable, Cloneable {
       return this;
     }
 
-    public Builder setUseBigtableHbaseClient(boolean useBigtableHbaseClient) {
-      options.useBigtableHbaseClient = useBigtableHbaseClient;
+    public Builder setUseGoogleCloudJava(boolean useGoogleCloudJava) {
+      options.useGoogleCloudJava = useGoogleCloudJava;
       return this;
     }
 
@@ -282,7 +282,7 @@ public class BigtableOptions implements Serializable, Cloneable {
   private int dataChannelCount;
   private boolean usePlaintextNegotiation;
   private boolean useCachedDataPool;
-  private boolean useBigtableHbaseClient;
+  private boolean useGoogleCloudJava;
 
   private BigtableInstanceName instanceName;
 
@@ -413,8 +413,8 @@ public class BigtableOptions implements Serializable, Cloneable {
     return usePlaintextNegotiation;
   }
 
-  public boolean isUseBigtableHbaseClient() {
-    return useBigtableHbaseClient;
+  public boolean isUseGoogleCloudJava() {
+    return useGoogleCloudJava;
   }
 
   /**
@@ -450,7 +450,7 @@ public class BigtableOptions implements Serializable, Cloneable {
         && Objects.equals(retryOptions, other.retryOptions)
         && Objects.equals(bulkOptions, other.bulkOptions)
         && Objects.equals(callOptionsConfig, other.callOptionsConfig)
-        && Objects.equals(useBigtableHbaseClient, other.useBigtableHbaseClient);
+        && Objects.equals(useGoogleCloudJava, other.useGoogleCloudJava);
   }
 
   /** {@inheritDoc} */
@@ -472,7 +472,7 @@ public class BigtableOptions implements Serializable, Cloneable {
         .add("callOptionsConfig", callOptionsConfig)
         .add("usePlaintextNegotiation", usePlaintextNegotiation)
         .add("useCachedDataPool", useCachedDataPool)
-        .add("useBigtableHbaseClient", useBigtableHbaseClient)
+        .add("useGoogleCloudJava", useGoogleCloudJava)
         .toString();
   }
 

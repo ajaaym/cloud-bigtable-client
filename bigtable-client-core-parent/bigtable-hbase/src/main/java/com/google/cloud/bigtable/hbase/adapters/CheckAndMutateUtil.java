@@ -17,9 +17,14 @@ package com.google.cloud.bigtable.hbase.adapters;
 
 import com.google.bigtable.v2.CheckAndMutateRowRequest;
 import com.google.bigtable.v2.CheckAndMutateRowResponse;
+import com.google.bigtable.v2.MutateRowRequest;
 import com.google.bigtable.v2.Mutation;
 import com.google.bigtable.v2.ReadRowsRequest;
 import com.google.bigtable.v2.RowFilter;
+import com.google.cloud.bigtable.data.v2.internal.RequestContext;
+import com.google.cloud.bigtable.data.v2.models.ConditionalRowMutation;
+import com.google.cloud.bigtable.data.v2.models.InstanceName;
+import com.google.cloud.bigtable.data.v2.models.RowMutation;
 import com.google.cloud.bigtable.hbase.adapters.read.ReadHooks;
 import com.google.cloud.bigtable.hbase.filter.TimestampRangeFilter;
 import com.google.common.base.Function;
@@ -86,7 +91,7 @@ public class CheckAndMutateUtil {
     private final HBaseRequestAdapter hbaseAdapter;
     private final CheckAndMutateRowRequest.Builder requestBuilder;
 
-    private final List<Mutation> mutations = new ArrayList<>();
+    private final List<RowMutation> rowMutations = new ArrayList<>();
 
     private final byte[] row;
     private final byte[] family;
@@ -177,31 +182,31 @@ public class CheckAndMutateUtil {
     }
 
     public RequestBuilder withPut(Put put) throws DoNotRetryIOException {
-      return addMutations(put.getRow(), hbaseAdapter.adapt(put).getMutationsList());
+      return addMutations(put.getRow(), hbaseAdapter.adapt(put));
     }
 
     public RequestBuilder withDelete(Delete delete) throws DoNotRetryIOException {
-      return addMutations(delete.getRow(), hbaseAdapter.adapt(delete).getMutationsList());
+      return addMutations(delete.getRow(), hbaseAdapter.adapt(delete));
     }
 
     public RequestBuilder withMutations(RowMutations rm) throws DoNotRetryIOException {
-      return addMutations(rm.getRow(), hbaseAdapter.adapt(rm).getMutationsList());
+      return addMutations(rm.getRow(), hbaseAdapter.adapt(rm));
     }
 
-    private RequestBuilder addMutations(byte[] actionRow, List<Mutation> mutations) throws DoNotRetryIOException {
+    private RequestBuilder addMutations(byte[] actionRow, RowMutation mutation) throws DoNotRetryIOException {
       if (!Arrays.equals(actionRow, row)) {
         // The following odd exception message is for compatibility with HBase.
         throw new DoNotRetryIOException("Action's getRow must match the passed row");
       }
-      this.mutations.addAll(mutations);
+      this.rowMutations.add(mutation);
       return this;
     }
 
-    public CheckAndMutateRowRequest build() {
+    public ConditionalRowMutation build() {
       Preconditions.checkState(checkNonExistence || compareOp != null,
           "condition is null. You need to specify the condition by" +
           " calling ifNotExists/ifEquals/ifMatches before executing the request");
-
+      ConditionalRowMutation conditionalRowMutation = ConditionalRowMutation.create("", ByteString.copyFromUtf8(""));
       Scan scan = new Scan();
       scan.setMaxVersions(1);
       scan.addColumn(family, qualifier);
@@ -210,10 +215,10 @@ public class CheckAndMutateUtil {
         // See ifMatches javadoc for more information on this
         if (CompareOp.NOT_EQUAL.equals(compareOp)) {
           // check for existence
-          requestBuilder.addAllTrueMutations(mutations);
+          conditionalRowMutation.then(convertToModel(rowMutations));
         } else {
           // check for non-existence
-          requestBuilder.addAllFalseMutations(mutations);
+          conditionalRowMutation.otherwise(convertToModel(rowMutations));
         }
         if (timeFilter != null) {
           scan.setFilter(timeFilter);
@@ -226,13 +231,38 @@ public class CheckAndMutateUtil {
         } else {
           scan.setFilter(valueFilter);
         }
-        requestBuilder.addAllTrueMutations(mutations);
+        conditionalRowMutation.then(convertToModel(rowMutations));
       }
-      requestBuilder.setPredicateFilter(
-          Adapters.SCAN_ADAPTER.buildFilter(scan, UNSUPPORTED_READ_HOOKS));
+      conditionalRowMutation.condition(Adapters.SCAN_ADAPTER.buildModelFilter(scan, UNSUPPORTED_READ_HOOKS));
 
-      return requestBuilder.build();
+      return conditionalRowMutation;
     }
+  }
+
+  private static com.google.cloud.bigtable.data.v2.models.Mutation convertToModel(List<RowMutation> rowMutations) {
+    RequestContext requestContext = RequestContext.create(
+        InstanceName.of("", ""),
+        ""
+    );
+    com.google.cloud.bigtable.data.v2.models.Mutation modelMutation = com.google.cloud.bigtable.data.v2.models.Mutation.create();
+    for(RowMutation rowMutation : rowMutations) {
+      for(Mutation mutation: rowMutation.toProto(requestContext).getMutationsList()) {
+        if(mutation.hasSetCell()) {
+          Mutation.SetCell setCell = mutation.getSetCell();
+          modelMutation.setCell(setCell.getFamilyName(), setCell.getColumnQualifier(), setCell.getTimestampMicros(), setCell.getValue());
+        } else if(mutation.hasDeleteFromColumn()) {
+          Mutation.DeleteFromColumn deleteFromColumn = mutation.getDeleteFromColumn();
+          modelMutation.deleteCells(deleteFromColumn.getFamilyName(), deleteFromColumn.getColumnQualifier());
+        } else if (mutation.hasDeleteFromFamily()) {
+          Mutation.DeleteFromFamily deleteFromFamily = mutation.getDeleteFromFamily();
+          modelMutation.deleteFamily(deleteFromFamily.getFamilyName());
+        } else if (mutation.hasDeleteFromRow()) {
+          modelMutation.deleteRow();
+        }
+      }
+    }
+
+    return modelMutation;
   }
 
   /**

@@ -15,7 +15,10 @@
  */
 package com.google.cloud.bigtable.hbase;
 
+import com.google.cloud.bigtable.data.v2.models.ConditionalRowMutation;
+import com.google.cloud.bigtable.data.v2.models.ReadModifyWriteRow;
 import com.google.cloud.bigtable.data.v2.models.RowMutation;
+import com.google.cloud.bigtable.core.ClientWrapper;
 import io.opencensus.common.Scope;
 import io.opencensus.trace.Status;
 import java.io.IOException;
@@ -51,7 +54,6 @@ import org.apache.hadoop.hbase.client.coprocessor.Batch;
 import org.apache.hadoop.hbase.filter.CompareFilter;
 import org.apache.hadoop.hbase.filter.Filter;
 import org.apache.hadoop.hbase.filter.FilterList;
-import org.apache.hadoop.hbase.filter.KeyOnlyFilter;
 import org.apache.hadoop.hbase.filter.WhileMatchFilter;
 import org.apache.hadoop.hbase.ipc.CoprocessorRpcChannel;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -62,9 +64,6 @@ import org.apache.hadoop.hbase.shaded.com.google.protobuf.ServiceException;
 
 import com.google.bigtable.v2.CheckAndMutateRowRequest;
 import com.google.bigtable.v2.CheckAndMutateRowResponse;
-import com.google.bigtable.v2.MutateRowRequest;
-import com.google.bigtable.v2.ReadModifyWriteRowRequest;
-import com.google.bigtable.v2.ReadModifyWriteRowResponse;
 import com.google.cloud.bigtable.config.BigtableOptions;
 import com.google.cloud.bigtable.config.Logger;
 import com.google.cloud.bigtable.grpc.BigtableDataClient;
@@ -114,6 +113,7 @@ public abstract class AbstractBigtableTable implements Table {
   protected final HBaseRequestAdapter hbaseAdapter;
 
   protected final BigtableDataClient client;
+  protected final ClientWrapper clientWrapper;
   private BatchExecutor batchExecutor;
   protected final AbstractBigtableConnection bigtableConnection;
   private TableMetrics metrics = new TableMetrics();
@@ -130,6 +130,7 @@ public abstract class AbstractBigtableTable implements Table {
     BigtableSession session = bigtableConnection.getSession();
     this.options = session.getOptions();
     this.client = session.getDataClient();
+    this.clientWrapper = session.getClientWrapper();
     this.hbaseAdapter = hbaseAdapter;
     this.tableName = hbaseAdapter.getTableName();
   }
@@ -349,7 +350,7 @@ public abstract class AbstractBigtableTable implements Table {
     Span span = TRACER.spanBuilder("BigtableTable.put").startSpan();
     try (Scope scope = TRACER.withSpan(span);
         Timer.Context timerContext = metrics.putTimer.time()) {
-      client.mutateRow(rowMutation);
+      clientWrapper.mutateRow(rowMutation);
     } catch (Throwable t) {
       span.setStatus(Status.UNKNOWN);
       throw logAndCreateIOException("put", put.getRow(), t);
@@ -387,7 +388,7 @@ public abstract class AbstractBigtableTable implements Table {
   public boolean checkAndPut(byte[] row, byte[] family, byte[] qualifier,
       CompareFilter.CompareOp compareOp, byte[] value, Put put) throws IOException {
     LOG.trace("checkAndPut(byte[], byte[], byte[], CompareOp, value, Put)");
-    CheckAndMutateRowRequest request =
+    ConditionalRowMutation request =
         new CheckAndMutateUtil.RequestBuilder(hbaseAdapter, row, family)
             .qualifier(qualifier)
             .ifMatches(compareOp, value)
@@ -403,8 +404,8 @@ public abstract class AbstractBigtableTable implements Table {
     LOG.trace("delete(Delete)");
     Span span = TRACER.spanBuilder("BigtableTable.delete").startSpan();
     try (Scope scope = TRACER.withSpan(span)) {
-      MutateRowRequest request = hbaseAdapter.adapt(delete);
-      client.mutateRow(request);
+      RowMutation rowMutation = hbaseAdapter.adapt(delete);
+      clientWrapper.mutateRow(rowMutation);
     } catch (Throwable t) {
       span.setStatus(Status.UNKNOWN);
       throw logAndCreateIOException("delete", delete.getRow(), t);
@@ -434,7 +435,7 @@ public abstract class AbstractBigtableTable implements Table {
   public boolean checkAndDelete(byte[] row, byte[] family, byte[] qualifier,
       CompareFilter.CompareOp compareOp, byte[] value, Delete delete) throws IOException {
     LOG.trace("checkAndDelete(byte[], byte[], byte[], CompareOp, byte[], Delete)");
-    CheckAndMutateRowRequest request =
+    ConditionalRowMutation request =
         new CheckAndMutateUtil.RequestBuilder(hbaseAdapter, row, family)
             .qualifier(qualifier)
             .ifMatches(compareOp, value)
@@ -452,7 +453,7 @@ public abstract class AbstractBigtableTable implements Table {
       throws IOException {
     LOG.trace("checkAndMutate(byte[], byte[], byte[], CompareOp, byte[], RowMutations)");
 
-    CheckAndMutateRowRequest request =
+    ConditionalRowMutation request =
         new CheckAndMutateUtil.RequestBuilder(hbaseAdapter, row, family)
             .qualifier(qualifier)
             .ifMatches(compareOp, value)
@@ -462,12 +463,11 @@ public abstract class AbstractBigtableTable implements Table {
     return checkAndMutate(row, request, "checkAndMutate");
   }
 
-  private boolean checkAndMutate(final byte[] row, CheckAndMutateRowRequest request, String type)
+  private boolean checkAndMutate(final byte[] row, ConditionalRowMutation request, String type)
       throws IOException {
     Span span = TRACER.spanBuilder("BigtableTable." + type).startSpan();
     try (Scope scope = TRACER.withSpan(span)) {
-      CheckAndMutateRowResponse response = client.checkAndMutateRow(request);
-      return CheckAndMutateUtil.wasMutationApplied(request, response);
+      return clientWrapper.checkAndMutateRow(request);
     } catch (Throwable t) {
       span.setStatus(Status.UNKNOWN);
       throw logAndCreateIOException(type, row, t);
@@ -482,8 +482,8 @@ public abstract class AbstractBigtableTable implements Table {
     LOG.trace("mutateRow(RowMutation)");
     Span span = TRACER.spanBuilder("BigtableTable.mutateRow").startSpan();
     try (Scope scope = TRACER.withSpan(span)) {
-      MutateRowRequest request = hbaseAdapter.adapt(rm);
-      client.mutateRow(request);
+      RowMutation rowMutation = hbaseAdapter.adapt(rm);
+      clientWrapper.mutateRow(rowMutation);
     } catch (Throwable t) {
       span.setStatus(Status.UNKNOWN);
       throw logAndCreateIOException("mutateRow", rm.getRow(), t);
@@ -498,12 +498,12 @@ public abstract class AbstractBigtableTable implements Table {
     LOG.trace("append(Append)");
     Span span = TRACER.spanBuilder("BigtableTable.append").startSpan();
     try (Scope scope = TRACER.withSpan(span)) {
-      ReadModifyWriteRowRequest request = hbaseAdapter.adapt(append);
-      ReadModifyWriteRowResponse response = client.readModifyWriteRow(request);
+      ReadModifyWriteRow request = hbaseAdapter.adapt(append);
+      com.google.cloud.bigtable.data.v2.models.Row row = clientWrapper.readModifyWriteRow(request);
       // The bigtable API will always return the mutated results. In order to maintain
       // compatibility, simply return null when results were not requested.
       if (append.isReturnResults()) {
-        return Adapters.ROW_ADAPTER.adaptResponse(response.getRow());
+        return Adapters.ROW_ADAPTER_V2.adaptResponse(row);
       } else {
         return null;
       }
@@ -521,8 +521,8 @@ public abstract class AbstractBigtableTable implements Table {
     LOG.trace("increment(Increment)");
     Span span = TRACER.spanBuilder("BigtableTable.increment").startSpan();
     try (Scope scope = TRACER.withSpan(span)) {
-      ReadModifyWriteRowRequest request = hbaseAdapter.adapt(increment);
-      return Adapters.ROW_ADAPTER.adaptResponse(client.readModifyWriteRow(request).getRow());
+      ReadModifyWriteRow request = hbaseAdapter.adapt(increment);
+      return Adapters.ROW_ADAPTER_V2.adaptResponse(clientWrapper.readModifyWriteRow(request));
     } catch (Throwable t) {
       span.setStatus(Status.UNKNOWN);
       throw logAndCreateIOException("increment", increment.getRow(), t);
